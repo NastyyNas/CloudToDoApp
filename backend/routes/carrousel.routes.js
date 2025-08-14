@@ -1,40 +1,47 @@
+// npm i express @google-cloud/storage
+// Requires the VM's service account to have:
+// - roles/storage.objectViewer (list/get objects)
+// - roles/iam.serviceAccountTokenCreator (to sign V4 URLs when using ADC)
+
 const express = require('express');
+const { Storage } = require('@google-cloud/storage');
+
 const carrouselRouter = express.Router();
+const storage = new Storage(); // uses Application Default Credentials (ADC)
 
-const AWS = require('aws-sdk');
-const s3 = new AWS.S3({
-    accessKeyId: process.env.AWS_ACCESS_KEY,
-    secretAccessKey: process.env.AWS_SECRET_KEY,
-    region: 'us-east-1',
-});
+const BUCKET = process.env.BUCKET;            // required
+const PREFIX = process.env.BUCKET_PREFIX || 'images/'; // optional "folder" like "images/"
 
-carrouselRouter.get('', (req, res) => {
-    const params = {
-        Bucket: process.env.BUCKET,
-    };
+carrouselRouter.get('/', async (req, res) => {
+  try {
+    if (!BUCKET) {
+      return res.status(400).json({ error: 'BUCKET env var is required' });
+    }
 
-    s3.listObjectsV2(params, (err, data) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: 'Internal Server Error' });
-        }
+    const bucket = storage.bucket(BUCKET);
 
-        const jpgImages = data.Contents.filter((obj) => {
-            return obj.Key.endsWith('.jpg');
-        });
+    // List files (optionally under a prefix like "images/")
+    const [files] = await bucket.getFiles(PREFIX ? { prefix: PREFIX } : {});
 
-        const images = jpgImages.map((obj) => {
-            const url = s3.getSignedUrl('getObject', {
-                Bucket: params.Bucket,
-                Key: obj.Key,
-                Expires: 60,
-            });
-            return { url };
-        });
+    // Keep only .jpg files (case-insensitive)
+    const jpgFiles = files.filter(f => f.name.toLowerCase().endsWith('.jpg'));
 
-        res.json(images);
-    });
+    // Generate signed (v4) READ URLs that expire in 60 seconds
+    const urls = await Promise.all(
+      jpgFiles.map(f =>
+        f.getSignedUrl({
+          version: 'v4',
+          action: 'read',
+          expires: Date.now() + 60 * 1000, // 60s
+        }).then(([url]) => ({ url }))
+      )
+    );
+
+    res.json(urls);
+  } catch (err) {
+    console.error('Error generating carousel URLs:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
 module.exports = carrouselRouter;
-
