@@ -10,7 +10,6 @@ const carrouselRouter = express.Router();
 const storage = new Storage(); // uses Application Default Credentials (ADC)
 
 const BUCKET = process.env.BUCKET;            // required
-const PREFIX = process.env.BUCKET_PREFIX || 'images/'; // optional "folder" like "images/"
 
 carrouselRouter.get('/', async (req, res) => {
   try {
