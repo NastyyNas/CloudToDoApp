@@ -2,6 +2,7 @@ const express = require('express');
 const carrouselRouter = express.Router();
 
 const { Storage } = require('@google-cloud/storage');
+const storage = new Storage();
 
 const BUCKET_NAME = process.env.BUCKET;
 
