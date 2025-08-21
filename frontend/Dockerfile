@@ -6,7 +6,7 @@ ENV APIURL ${APIURL}
 
 COPY . .
 
-RUN echo "export const environment = {production: true, apiurl: '${APIURL}'};" > /usr/src/app/src/environments/environment.prod.ts
+RUN echo "export const environment = {production: true, apiurl: 'http://104.155.9.41:3000'};" > /usr/src/app/src/environments/environment.prod.ts
 
 RUN npm install
 RUN npm run build --configuration=production

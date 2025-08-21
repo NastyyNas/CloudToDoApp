@@ -3,12 +3,6 @@ const carrouselRouter = express.Router();
 
 const { Storage } = require('@google-cloud/storage');
 
-// Set up Google Cloud Storage client
-const storage = new Storage({
-    projectId: process.env.GCLOUD_PROJECT_ID,
-    keyFilename: process.env.GCLOUD_KEY_FILE, // Path to your service account key file
-});
-
 const BUCKET_NAME = process.env.BUCKET;
 
 carrouselRouter.get('', async (req, res) => {
