@@ -1,46 +1,38 @@
-// npm i express @google-cloud/storage
-// Requires the VM's service account to have:
-// - roles/storage.objectViewer (list/get objects)
-// - roles/iam.serviceAccountTokenCreator (to sign V4 URLs when using ADC)
-
 const express = require('express');
+const carrouselRouter = express.Router();
+
 const { Storage } = require('@google-cloud/storage');
 
-const carrouselRouter = express.Router();
-const storage = new Storage(); // uses Application Default Credentials (ADC)
+// Set up Google Cloud Storage client
+const storage = new Storage({
+    projectId: process.env.GCLOUD_PROJECT_ID,
+    keyFilename: process.env.GCLOUD_KEY_FILE, // Path to your service account key file
+});
 
-const BUCKET = process.env.BUCKET;            // required
+const BUCKET_NAME = process.env.BUCKET;
 
-carrouselRouter.get('/', async (req, res) => {
-  try {
-    if (!BUCKET) {
-      return res.status(400).json({ error: 'BUCKET env var is required' });
+carrouselRouter.get('', async (req, res) => {
+    try {
+        const [files] = await storage.bucket(BUCKET_NAME).getFiles();
+
+        const jpgImages = files.filter(file => file.name.endsWith('.jpg'));
+
+        // Generate signed URLs for each image
+        const images = await Promise.all(
+            jpgImages.map(async (file) => {
+                const [url] = await file.getSignedUrl({
+                    action: 'read',
+                    expires: Date.now() + 60 * 1000, // 1 minute
+                });
+                return { url };
+            })
+        );
+
+        res.json(images);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
-
-    const bucket = storage.bucket(BUCKET);
-
-    // List files (optionally under a prefix like "images/")
-    const [files] = await bucket.getFiles(PREFIX ? { prefix: PREFIX } : {});
-
-    // Keep only .jpg files (case-insensitive)
-    const jpgFiles = files.filter(f => f.name.toLowerCase().endsWith('.jpg'));
-
-    // Generate signed (v4) READ URLs that expire in 60 seconds
-    const urls = await Promise.all(
-      jpgFiles.map(f =>
-        f.getSignedUrl({
-          version: 'v4',
-          action: 'read',
-          expires: Date.now() + 60 * 1000, // 60s
-        }).then(([url]) => ({ url }))
-      )
-    );
-
-    res.json(urls);
-  } catch (err) {
-    console.error('Error generating carousel URLs:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
 });
 
 module.exports = carrouselRouter;
